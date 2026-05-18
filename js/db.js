@@ -19,7 +19,7 @@ const DB = {
   },
   addProduct(catId, product) {
     const list = this.getCatalog(catId);
-    product.id = `${catId}_${Date.now()}`;
+    product.id = `${catId}_${Date.now()}_${Math.random().toString(36).substr(2,6)}`;
     product.fecha = new Date().toISOString();
     list.push(product);
     this.saveCatalog(catId, list);
