@@ -1001,33 +1001,27 @@ const APP = {
         const tc = await page.getTextContent();
         fullText += tc.items.map(i => i.str).join(' ') + '\n';
 
-        // Annotations (links)
+        // Annotations (links) — url or unsafeUrl depending on PDF.js version
         const annotations = await page.getAnnotations();
         const uriAnnots = annotations
-          .filter(a => a.subtype === 'Link' && a.url)
-          .sort((a, b) => {
-            const ay = Math.round(a.rect[1]);
-            const by = Math.round(b.rect[1]);
-            if (ay !== by) return by - ay;
-            return a.rect[0] - b.rect[0];
-          });
+          .filter(a => a.subtype === 'Link' && (a.url || a.unsafeUrl))
+          .map(a => ({ url: a.url || a.unsafeUrl, x: a.rect[0], y: a.rect[1] }));
 
-        // Group by Y row
+        // Group by Y row (bucket by 10pt)
         const rowMap = {};
         for (const a of uriAnnots) {
-          const y = Math.round(a.rect[1] / 5) * 5;
+          const y = Math.round(a.y / 10) * 10;
           rowMap[y] = rowMap[y] || [];
-          rowMap[y].push({ url: a.url, x: a.rect[0] });
+          rowMap[y].push(a);
         }
 
         for (const row of Object.values(rowMap)) {
-          const urls = row.sort((a,b) => a.x - b.x).map(r => r.url);
+          const sorted = row.sort((a, b) => a.x - b.x);
+          const urls   = sorted.map(r => r.url);
           if (urls.some(u => u.includes('bidcom.com.ar'))) {
-            linksByRow.publicacion.push(...row.sort((a,b) => a.x - b.x).map(r => ({ url: r.url, x: r.x })));
-          } else if (urls.some(u => u.includes('spreadsheets') || (u.includes('drive.google') && u.includes('file')))) {
+            linksByRow.publicacion.push(...sorted.map(r => r.url));
+          } else if (urls.some(u => u.includes('spreadsheets') || u.includes('drive.google'))) {
             linksByRow.qc.push(...urls);
-          } else if (urls.some(u => u.includes('drive.google'))) {
-            linksByRow.artworks.push(...urls);
           }
         }
 

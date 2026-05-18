@@ -123,8 +123,9 @@ Respondé SOLO con JSON válido, sin texto adicional ni backticks:
     ).join('\n      ');
 
     // Build link context string for the prompt
-    const linkContext = linksByRow.publicacion?.length
-      ? `\nLos links de publicación en orden de columna son:\n${linksByRow.publicacion.map((u,i) => `  Producto ${i+1}: ${u}`).join('\n')}`
+    const pubUrls = linksByRow.publicacion || [];
+    const linkContext = pubUrls.length
+      ? `\nLos links de publicación en orden de columna son:\n${pubUrls.map((u,i) => `  Producto ${i+1}: ${u}`).join('\n')}`
       : '';
 
     const prompt = `Sos un analista de productos para Argentina.
