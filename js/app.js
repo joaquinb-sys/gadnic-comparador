@@ -443,36 +443,44 @@ const APP = {
         <h3 class="wizard-q">¿Qué modelos propios incluís en la comparativa?</h3>
         ${prods.length === 0
           ? `<div class="empty-wizard">No hay productos en el catálogo de ${cat.nombre}.
-              <br><button class="link-btn" onclick="APP.go('catalogo')">→ Ir al catálogo a agregar</button></div>`
-          : `<div class="prod-check-list">
-              ${prods.map(p => `
-                <label class="prod-check-item ${this.state.wizard.propios.find(x=>x.id===p.id)?'checked':''}">
-                  <input type="checkbox" value="${p.id}"
-                    ${this.state.wizard.propios.find(x=>x.id===p.id)?'checked':''}
-                    onchange="APP.togglePropio('${p.id}')">
+              <br><button class="link-btn" onclick="APP.go(\'catalogo\')">→ Ir al catálogo a agregar</button></div>`
+          : `<div class="prod-check-list" id="propios-list">
+              ${prods.map(p => {
+                const sel = !!this.state.wizard.propios.find(x => x.id === p.id);
+                return `<div class="prod-check-item ${sel ? 'checked' : ''}" data-id="${p.id}" onclick="APP.togglePropio('${p.id}', this)">
+                  <div class="pci-check">${sel ? '☑' : '☐'}</div>
                   <div class="pci-info">
                     <strong>${p.nombre}</strong>
                     <span>${p.sku || ''} · ${p.nivel || ''} · ${p.pvp_ars ? '$'+Number(p.pvp_ars).toLocaleString('es-AR') : 'Sin precio'}</span>
                   </div>
                   ${p.imagen_url ? `<img src="${p.imagen_url}" class="pci-img">` : ''}
-                </label>`).join('')}
+                </div>`;
+              }).join('')}
             </div>`}
         <div class="wizard-foot">
           <button class="btn-ghost" onclick="APP.wizardBack()">← Atrás</button>
-          <button class="btn-primary" onclick="APP.wizardNext()" ${this.state.wizard.propios.length===0?'disabled':''}>Siguiente →</button>
+          <button class="btn-primary" id="btn-propios-next" onclick="APP.wizardNext()" ${this.state.wizard.propios.length===0?'disabled':''}>Siguiente →</button>
         </div>
       </div>`;
   },
 
-  togglePropio(prodId) {
+  togglePropio(prodId, el) {
     const { catId } = this.state.wizard;
     const prods     = DB.getCatalog(catId);
     const prod      = prods.find(p => p.id === prodId);
     if (!prod) return;
     const i = this.state.wizard.propios.findIndex(p => p.id === prodId);
-    if (i >= 0) this.state.wizard.propios.splice(i, 1);
-    else        this.state.wizard.propios.push(prod);
-    this.renderWizardStep3();
+    if (i >= 0) {
+      this.state.wizard.propios.splice(i, 1);
+      el.classList.remove('checked');
+      el.querySelector('.pci-check').textContent = '☐';
+    } else {
+      this.state.wizard.propios.push(prod);
+      el.classList.add('checked');
+      el.querySelector('.pci-check').textContent = '☑';
+    }
+    const btn = document.getElementById('btn-propios-next');
+    if (btn) btn.disabled = this.state.wizard.propios.length === 0;
   },
 
   // Step 4: Add external products
