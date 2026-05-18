@@ -3,16 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Gadnic · Comparador de Productos</title>
+<title>Comparador de Productos — Bidcom / Gadnic</title>
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 
-<!-- ── Sidebar nav ─────────────────────────────────────────────────────────── -->
 <nav class="sidebar">
   <div class="sidebar-logo">
-    <div class="brand">GADNIC</div>
-    <div class="brand-sub">Comparador v1.0</div>
+    <img src="https://static.bidcom.com.ar/images/vector/logo_bidcom.svg?v=0.1" alt="Bidcom">
+    <div class="brand-sub">Comparador de Productos</div>
   </div>
   <div class="nav-items">
     <div class="nav-item active" data-nav="catalogo">
@@ -29,23 +28,20 @@
     </div>
   </div>
   <div class="sidebar-foot">
-    Gadnic · Mayo 2026
+    Gadnic · v1.0 · Mayo 2026
   </div>
 </nav>
 
-<!-- ── Main area ───────────────────────────────────────────────────────────── -->
 <main class="main-area">
 
-  <!-- Setup banner (shown when no API key) -->
   <div class="setup-banner" id="setup-banner">
     <span class="sb-icon">⚡</span>
     <div>
-      <strong>Configurá tu Gemini API Key</strong> para habilitar la extracción automática con IA.
+      <strong>Configurá tu API Key</strong> para habilitar la extracción automática con IA.
     </div>
     <button class="btn-ghost" onclick="APP.go('config')">Ir a Config →</button>
   </div>
 
-  <!-- Sección: Catálogo -->
   <div id="sec-catalogo">
     <div class="sec-head">
       <h2>Catálogo de Productos</h2>
@@ -54,21 +50,14 @@
     <div id="cat-content"></div>
   </div>
 
-  <!-- Sección: Nueva comparativa (wizard) -->
   <div id="sec-nueva" style="display:none"></div>
-
-  <!-- Sección: Índice -->
   <div id="sec-indice" style="display:none"></div>
-
-  <!-- Sección: Config -->
   <div id="sec-config" style="display:none"></div>
 
 </main>
 
-<!-- Toast area -->
 <div id="toast-area"></div>
 
-<!-- Scripts -->
 <script src="js/config.js"></script>
 <script src="js/db.js"></script>
 <script src="js/gemini.js"></script>
