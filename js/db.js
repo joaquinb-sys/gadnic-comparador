@@ -90,6 +90,32 @@ const DB = {
     }
   },
 
+  // ── Export / Import ALL ───────────────────────────────────────────────────
+  exportAll() {
+    const data = {
+      version: 1,
+      fecha: new Date().toISOString(),
+      settings: this.getSettings(),
+      catalogos: {},
+      comparativas: this.getComparativas(),
+    };
+    for (const catId of Object.keys(CONFIG.categorias)) {
+      data.catalogos[catId] = this.getCatalog(catId);
+    }
+    return data;
+  },
+
+  importAll(data) {
+    if (!data.version || !data.catalogos) throw new Error('Formato inválido.');
+    if (data.settings) this.saveSettings(data.settings);
+    for (const [catId, prods] of Object.entries(data.catalogos)) {
+      if (CONFIG.categorias[catId]) this.saveCatalog(catId, prods);
+    }
+    if (data.comparativas) {
+      localStorage.setItem(this._key('comparativas'), JSON.stringify(data.comparativas));
+    }
+  },
+
   // Map Sheet row → product using field IDs
   sheetRowToProduct(row, catId) {
     const cat = CONFIG.categorias[catId];
