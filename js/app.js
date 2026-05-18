@@ -1031,66 +1031,6 @@ const APP = {
           }
         }
 
-        // ── Extract images with X position for column matching ────────────
-        const ops = await page.getOperatorList();
-        const imgPositions = [];
-
-        // Use page object map to get image positions via transform
-        const viewport = page.getViewport({ scale: 1 });
-        for (const annot of await page.getAnnotations()) { void annot; } // warmup
-
-        // Get image blocks via text content dict — images appear as type==1 blocks
-        // We use a canvas approach: render page and clip each image bbox
-        const canvas = document.createElement('canvas');
-        const scale  = 1.5;
-        const vp     = page.getViewport({ scale });
-        canvas.width  = vp.width;
-        canvas.height = vp.height;
-        const ctx = canvas.getContext('2d');
-        await page.render({ canvasContext: ctx, viewport: vp }).promise;
-
-        // Now extract image bboxes from operator list
-        // PDF.js exposes image xobjects; we find their positions via the OPS
-        const fnArray  = ops.fnArray;
-        const argsArray = ops.argsArray;
-        const OPS = window.pdfjsLib.OPS;
-        let currentTransform = [1,0,0,1,0,0];
-        const imgBboxes = [];
-
-        for (let k = 0; k < fnArray.length; k++) {
-          if (fnArray[k] === OPS.transform) {
-            currentTransform = argsArray[k];
-          }
-          if (fnArray[k] === OPS.paintImageXObject || fnArray[k] === OPS.paintJpegXObject) {
-            // currentTransform = [a,b,c,d,e,f]
-            // e=x, f=y (bottom-left in PDF coords), a=width, d=height
-            const [a,,, d, e, f] = currentTransform;
-            // Convert PDF coords to viewport coords
-            const x0 = e * scale;
-            const y0 = (viewport.height - f - Math.abs(d)) * scale;
-            const w  = Math.abs(a) * scale;
-            const h  = Math.abs(d) * scale;
-            const xCenter = e + Math.abs(a) / 2; // in PDF units for matching
-            imgBboxes.push({ x0, y0, w, h, xCenter });
-          }
-        }
-
-        // Extract each image as data URL by clipping the canvas
-        for (const bbox of imgBboxes) {
-          const imgCanvas = document.createElement('canvas');
-          imgCanvas.width  = Math.round(bbox.w);
-          imgCanvas.height = Math.round(bbox.h);
-          const imgCtx = imgCanvas.getContext('2d');
-          imgCtx.drawImage(canvas, bbox.x0, bbox.y0, bbox.w, bbox.h, 0, 0, bbox.w, bbox.h);
-          const dataUrl = imgCanvas.toDataURL('image/jpeg', 0.85);
-          linksByRow.images = linksByRow.images || [];
-          linksByRow.images.push({ dataUrl, xCenter: bbox.xCenter });
-        }
-
-        // Sort images by X
-        if (linksByRow.images) {
-          linksByRow.images.sort((a,b) => a.xCenter - b.xCenter);
-        }
       }
 
       // ── Step 4: Call AI ───────────────────────────────────────────────────
@@ -1124,20 +1064,19 @@ const APP = {
     const body = document.getElementById('pdf-import-body');
     if (!body) return;
 
-    // Assign images to products by column index (same X ordering)
-    const images = linksByRow.images || [];
-    if (images.length === products.length) {
-      products.forEach((p, i) => {
-        if (!p.imagen_url && images[i]) p.imagen_url = images[i].dataUrl;
-      });
-    }
+    // Build imagen_url from SKU for all products that don't have one
+    products.forEach(p => {
+      if (!p.imagen_url && p.sku) {
+        p.imagen_url = `https://images.bidcom.com.ar/resize?src=https://static.bidcom.com.ar/publicacionesML/productos/${p.sku}/1000x1000-${p.sku}-B.jpg&w=400&q=100`;
+      }
+    });
 
     const rows = products.map((p, i) => `
       <tr>
         <td><input type="checkbox" class="pdf-check" data-i="${i}" checked></td>
         <td style="text-align:center">
           ${p.imagen_url
-            ? `<img src="${p.imagen_url}" style="width:40px;height:40px;object-fit:contain;border-radius:4px;border:1px solid var(--border)">`
+            ? `<img src="${p.imagen_url}" style="width:40px;height:40px;object-fit:contain;border-radius:4px;border:1px solid var(--border)" onerror="this.style.display='none'">`
             : '<span style="font-size:20px">📷</span>'}
         </td>
         <td><span class="sku-text">${p.sku || '–'}</span></td>
@@ -1155,7 +1094,7 @@ const APP = {
 
     body.innerHTML = `
       <div class="gen-status success" style="margin-bottom:16px">
-        ✅ Se detectaron <strong>${products.length} productos</strong>${images.length === products.length ? ` con <strong>${images.length} imágenes</strong>` : ''}. Revisá y seleccioná los que querés importar.
+        ✅ Se detectaron <strong>${products.length} productos</strong>. Revisá y seleccioná los que querés importar.
       </div>
       <div class="table-scroll" style="max-height:340px;overflow-y:auto">
         <table class="data-table" style="font-size:12px">
@@ -1186,13 +1125,6 @@ const APP = {
     if (!selected.length) {
       this.showToast('Seleccioná al menos un producto.', 'warn');
       return;
-    }
-
-    // Auto-build imagen_url from SKU for Bidcom products that don't have one
-    for (const prod of selected) {
-      if (!prod.imagen_url && prod.sku) {
-        prod.imagen_url = `https://images.bidcom.com.ar/resize?src=https://static.bidcom.com.ar/publicacionesML/productos/${prod.sku}/1000x1000-${prod.sku}-B.jpg&w=400&q=100`;
-      }
     }
 
     let added = 0, updated = 0;
