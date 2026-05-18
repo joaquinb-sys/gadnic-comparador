@@ -6,7 +6,7 @@ const APP = {
     wizard:    null,   // active comparison wizard state
     editProd:  null,   // { catId, product } being edited
   },
-
+ 
   // ═══════════════════════════════════════════════════════════════════════════
   // INIT
   // ═══════════════════════════════════════════════════════════════════════════
@@ -15,7 +15,7 @@ const APP = {
     this.bindNav();
     this.render();
   },
-
+ 
   checkSetup() {
     const s = DB.getSettings();
     if (!s.geminiKey) {
@@ -23,7 +23,7 @@ const APP = {
       document.getElementById('setup-banner').style.display = 'flex';
     }
   },
-
+ 
   // ═══════════════════════════════════════════════════════════════════════════
   // NAV
   // ═══════════════════════════════════════════════════════════════════════════
@@ -32,7 +32,7 @@ const APP = {
       el.addEventListener('click', () => this.go(el.dataset.nav));
     });
   },
-
+ 
   go(section) {
     this.state.section = section;
     document.querySelectorAll('[data-nav]').forEach(el => {
@@ -40,14 +40,14 @@ const APP = {
     });
     this.render();
   },
-
+ 
   render() {
     const sections = ['catalogo','nueva','indice','config'];
     sections.forEach(s => {
       document.getElementById(`sec-${s}`).style.display =
         s === this.state.section ? 'block' : 'none';
     });
-
+ 
     switch (this.state.section) {
       case 'catalogo': this.renderCatalog(); break;
       case 'nueva':    this.renderWizard();  break;
@@ -55,7 +55,7 @@ const APP = {
       case 'config':   this.renderConfig();  break;
     }
   },
-
+ 
   // ═══════════════════════════════════════════════════════════════════════════
   // CATALOG
   // ═══════════════════════════════════════════════════════════════════════════
@@ -63,14 +63,14 @@ const APP = {
     const catId = this.state.catTab;
     const cat   = CONFIG.categorias[catId];
     const prods = DB.getCatalog(catId);
-
+ 
     // Tabs
     document.getElementById('cat-tabs').innerHTML = Object.values(CONFIG.categorias).map(c => `
       <button class="tab-btn ${c.id === catId ? 'active' : ''}" onclick="APP.setCatTab('${c.id}')">
         ${c.emoji} ${c.nombre}
         <span class="tab-count">${DB.getCatalog(c.id).length}</span>
       </button>`).join('');
-
+ 
     // Table
     const rows = prods.length
       ? prods.map(p => `
@@ -89,7 +89,7 @@ const APP = {
           </tr>`)
         .join('')
       : `<tr><td colspan="8" class="empty-row">Sin productos. <button class="link-btn" onclick="APP.openProductModal('${catId}')">Agregar el primero →</button></td></tr>`;
-
+ 
     document.getElementById('cat-content').innerHTML = `
       <div class="cat-toolbar">
         <button class="btn-primary" onclick="APP.openProductModal('${catId}')">+ Agregar producto</button>
@@ -109,32 +109,32 @@ const APP = {
         </table>
       </div>`;
   },
-
+ 
   setCatTab(catId) {
     this.state.catTab = catId;
     this.renderCatalog();
   },
-
+ 
   deleteProduct(catId, id) {
     if (!confirm('¿Eliminar este producto del catálogo?')) return;
     DB.deleteProduct(catId, id);
     this.renderCatalog();
   },
-
+ 
   editProduct(catId, id) {
     const prods = DB.getCatalog(catId);
     const prod  = prods.find(p => p.id === id);
     if (prod) this.openProductModal(catId, prod);
   },
-
+ 
   async syncFromSheets(catId) {
     const cat = CONFIG.categorias[catId];
     const s   = DB.getSettings();
     const sheetId = s.sheetId || CONFIG.sheetId;
-
+ 
     this.showToast('Sincronizando desde Sheets…', 'info');
     const rows = await DB.loadSheetTab(sheetId, cat.sheetName);
-
+ 
     if (!rows) {
       this.showToast('Error al conectar con Sheets. Verificá que el Sheet esté público.', 'error');
       return;
@@ -143,11 +143,11 @@ const APP = {
       this.showToast('La pestaña está vacía. Cargá datos en el Sheet primero.', 'warn');
       return;
     }
-
+ 
     // Merge: update existing by SKU, add new
     const existing = DB.getCatalog(catId);
     let added = 0, updated = 0;
-
+ 
     for (const row of rows) {
       if (!row['SKU'] && !row['Nombre']) continue;
       const prod = DB.sheetRowToProduct(row, catId);
@@ -160,11 +160,11 @@ const APP = {
         added++;
       }
     }
-
+ 
     this.showToast(`Sincronizado: ${added} nuevos, ${updated} actualizados.`, 'success');
     this.renderCatalog();
   },
-
+ 
   // ═══════════════════════════════════════════════════════════════════════════
   // PRODUCT MODAL (Add / Edit)
   // ═══════════════════════════════════════════════════════════════════════════
@@ -172,7 +172,7 @@ const APP = {
     const cat    = CONFIG.categorias[catId];
     const isEdit = !!product;
     const p      = product || {};
-
+ 
     const camposHTML = cat.campos.map(f => {
       const val = p[f.id] ?? '';
       if (f.tipo === 'booleano') {
@@ -192,7 +192,7 @@ const APP = {
           <input type="${f.tipo === 'numero' ? 'number' : 'text'}" name="${f.id}" value="${val}" placeholder="${f.req ? 'Requerido' : 'Opcional'}">
         </div>`;
     }).join('');
-
+ 
     const modalHTML = `
       <div class="modal-overlay" id="prod-modal">
         <div class="modal-box modal-lg">
@@ -202,6 +202,19 @@ const APP = {
           </div>
           <div class="modal-body">
             <form id="prod-form">
+              <div class="form-section">
+                <h3>Carga rápida con IA</h3>
+                <p style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Pegá el link de Bidcom y la IA completa los campos automáticamente. Después revisás y corregís lo que haga falta.</p>
+                <div style="display:flex;gap:8px;align-items:flex-end">
+                  <div class="form-group" style="flex:1">
+                    <label>Link Bidcom</label>
+                    <input type="text" id="modal-ia-url" placeholder="https://bidcom.com.ar/producto/...">
+                  </div>
+                  <button type="button" class="btn-ai" style="margin-bottom:1px" onclick="APP.extractToModal('${catId}')">✨ Extraer con IA</button>
+                </div>
+                <div id="modal-ia-status" style="display:none;margin-top:8px;font-size:12px;padding:8px 12px;border-radius:6px"></div>
+              </div>
+ 
               <div class="form-section">
                 <h3>Datos generales</h3>
                 <div class="form-grid-2">
@@ -230,7 +243,7 @@ const APP = {
                   </div>
                 </div>
               </div>
-
+ 
               <div class="form-section">
                 <h3>Rentabilidad</h3>
                 <div class="form-grid-3">
@@ -248,12 +261,12 @@ const APP = {
                   </div>
                 </div>
               </div>
-
+ 
               <div class="form-section">
                 <h3>Specs técnicas</h3>
                 <div class="form-grid-2">${camposHTML}</div>
               </div>
-
+ 
               <div class="form-section">
                 <label>Diferenciadores</label>
                 <textarea name="diferenciadores" rows="3" placeholder="Diferenciadores únicos del producto…">${p.diferenciadores||''}</textarea>
@@ -268,14 +281,52 @@ const APP = {
           </div>
         </div>
       </div>`;
-
+ 
     document.body.insertAdjacentHTML('beforeend', modalHTML);
   },
-
+ 
+  async extractToModal(catId) {
+    const url = document.getElementById('modal-ia-url').value.trim();
+    if (!url) { this.showToast('Pegá un link primero.', 'warn'); return; }
+ 
+    const status = document.getElementById('modal-ia-status');
+    status.style.display = 'block';
+    status.style.background = '#1e2a3a';
+    status.style.color = '#93c5fd';
+    status.textContent = '✨ Extrayendo specs con IA…';
+ 
+    try {
+      const data = await GEMINI.extractFromURL(url, catId);
+      const form = document.getElementById('prod-form');
+ 
+      // Fill each form field with extracted data
+      for (const [key, val] of Object.entries(data)) {
+        const el = form.querySelector(`[name="${key}"]`);
+        if (!el || val == null) continue;
+        if (el.tagName === 'SELECT') {
+          // For boolean selects
+          const opt = el.querySelector(`option[value="${val}"]`) ||
+                      el.querySelector(`option[value="${String(val).toLowerCase()}"]`);
+          if (opt) opt.selected = true;
+        } else {
+          el.value = val;
+        }
+      }
+ 
+      status.style.background = '#0f2d1a';
+      status.style.color = '#6ee7b7';
+      status.textContent = '✅ Specs cargadas. Revisá y corregí lo que haga falta.';
+    } catch(e) {
+      status.style.background = '#2d0f0f';
+      status.style.color = '#fca5a5';
+      status.textContent = '⚠ ' + e.message;
+    }
+  },
+ 
   saveProduct(catId, id) {
     const form = document.getElementById('prod-form');
     const data = Object.fromEntries(new FormData(form).entries());
-
+ 
     // Basic validation
     if (!data.sku && !data.nombre) {
       this.showToast('SKU o Nombre son obligatorios.', 'error'); return;
@@ -286,7 +337,7 @@ const APP = {
       if (f.tipo === 'booleano' && data[f.id] !== '') data[f.id] = data[f.id] === 'true';
       if (f.tipo === 'numero'  && data[f.id] !== '') data[f.id] = parseFloat(data[f.id]) || data[f.id];
     }
-
+ 
     if (id) {
       DB.updateProduct(catId, id, data);
       this.showToast('Producto actualizado.', 'success');
@@ -294,11 +345,11 @@ const APP = {
       DB.addProduct(catId, data);
       this.showToast('Producto agregado al catálogo.', 'success');
     }
-
+ 
     this.closeModal('prod-modal');
     this.renderCatalog();
   },
-
+ 
   // ═══════════════════════════════════════════════════════════════════════════
   // COMPARISON WIZARD
   // ═══════════════════════════════════════════════════════════════════════════
@@ -308,15 +359,15 @@ const APP = {
     }
     this['renderWizardStep' + this.state.wizard.step]();
   },
-
+ 
   resetWizard() {
     this.state.wizard = null;
     this.renderWizard();
   },
-
+ 
   wizardNext() { this.state.wizard.step++; this.renderWizard(); },
   wizardBack() { this.state.wizard.step--; this.renderWizard(); },
-
+ 
   // Step 1: Select category
   renderWizardStep1() {
     document.getElementById('sec-nueva').innerHTML = `
@@ -340,12 +391,12 @@ const APP = {
         </div>
       </div>`;
   },
-
+ 
   selectCat(catId) {
     this.state.wizard.catId = catId;
     this.renderWizardStep1();
   },
-
+ 
   // Step 2: Select type
   renderWizardStep2() {
     document.getElementById('sec-nueva').innerHTML = `
@@ -369,20 +420,20 @@ const APP = {
         </div>
       </div>`;
   },
-
+ 
   selectTipo(tipo) {
     this.state.wizard.tipo = tipo;
     this.renderWizardStep2();
   },
-
+ 
   // Step 3: Select own products (not needed for 'mixto')
   renderWizardStep3() {
     const { catId, tipo } = this.state.wizard;
     if (tipo === 'mixto') { this.wizardNext(); return; }
-
+ 
     const cat   = CONFIG.categorias[catId];
     const prods = DB.getCatalog(catId);
-
+ 
     document.getElementById('sec-nueva').innerHTML = `
       <div class="wizard-wrap">
         <div class="wizard-head">
@@ -412,7 +463,7 @@ const APP = {
         </div>
       </div>`;
   },
-
+ 
   togglePropio(prodId) {
     const { catId } = this.state.wizard;
     const prods     = DB.getCatalog(catId);
@@ -423,13 +474,13 @@ const APP = {
     else        this.state.wizard.propios.push(prod);
     this.renderWizardStep3();
   },
-
+ 
   // Step 4: Add external products
   renderWizardStep4() {
     const { catId, tipo } = this.state.wizard;
     const cat   = CONFIG.categorias[catId];
     const externos = this.state.wizard.externos;
-
+ 
     const renderExtCard = (p, i) => `
       <div class="ext-card">
         <div class="ext-card-head">
@@ -497,7 +548,7 @@ const APP = {
           </div>
         </div>
       </div>`;
-
+ 
     document.getElementById('sec-nueva').innerHTML = `
       <div class="wizard-wrap">
         <div class="wizard-head">
@@ -515,21 +566,21 @@ const APP = {
         </div>
       </div>`;
   },
-
+ 
   addExterno() {
     this.state.wizard.externos.push({ nombre: '', _new: true });
     this.renderWizardStep4();
   },
-
+ 
   removeExterno(i) {
     this.state.wizard.externos.splice(i, 1);
     this.renderWizardStep4();
   },
-
+ 
   updateExterno(i, field, value) {
     this.state.wizard.externos[i][field] = value;
   },
-
+ 
   async extractFromURL(i) {
     const p     = this.state.wizard.externos[i];
     const url   = p.fuente;
@@ -544,12 +595,12 @@ const APP = {
       this.showToast('Error: ' + e.message, 'error');
     }
   },
-
+ 
   // Step 5: Generate comparison
   async renderWizardStep5() {
     const { catId, tipo, propios, externos, nombre } = this.state.wizard;
     const cat = CONFIG.categorias[catId];
-
+ 
     document.getElementById('sec-nueva').innerHTML = `
       <div class="wizard-wrap">
         <div class="wizard-head">
@@ -581,7 +632,7 @@ const APP = {
         </div>
       </div>`;
   },
-
+ 
   async runGenerate() {
     const { catId, tipo, propios, externos } = this.state.wizard;
     document.getElementById('btn-generate').disabled = true;
@@ -589,7 +640,7 @@ const APP = {
     status.style.display = 'block';
     status.className = 'gen-status info';
     status.textContent = '✨ Analizando con IA…';
-
+ 
     try {
       const analisis = await GEMINI.analyzeComparativa(propios, externos, tipo, catId);
       this.state.wizard.analisis = analisis;
@@ -602,17 +653,17 @@ const APP = {
       document.getElementById('btn-generate').disabled = false;
     }
   },
-
+ 
   skipAnalysis() {
     this.state.wizard.analisis = {};
     this.wizardNext();
   },
-
+ 
   // Step 6: Preview & Export
   renderWizardStep6() {
     const w   = this.state.wizard;
     const cat = CONFIG.categorias[w.catId];
-
+ 
     document.getElementById('sec-nueva').innerHTML = `
       <div class="wizard-wrap wizard-wide">
         <div class="wizard-head">
@@ -635,17 +686,17 @@ const APP = {
           <button class="btn-primary" onclick="APP.saveAndFinish()">💾 Guardar y terminar</button>
         </div>
       </div>`;
-
+ 
     this._updatePreview();
   },
-
+ 
   setFormato(f) {
     this.state.wizard.formato = f;
     document.querySelectorAll('.btn-format').forEach(b => b.classList.remove('active'));
     document.querySelector(`.btn-format:${f==='tarjetas'?'first':'last'}-child`).classList.add('active');
     this._updatePreview();
   },
-
+ 
   _updatePreview() {
     const w    = this.state.wizard;
     const comp = { ...w, fecha: new Date().toISOString() };
@@ -655,7 +706,7 @@ const APP = {
     const doc = iframe.contentDocument || iframe.contentWindow.document;
     doc.open(); doc.write(html); doc.close();
   },
-
+ 
   exportComp() {
     const w    = this.state.wizard;
     const comp = { ...w, fecha: new Date().toISOString() };
@@ -665,7 +716,7 @@ const APP = {
     EXPORT.downloadHTML(html, `${name}_${w.formato}.html`);
     this.showToast('HTML descargado.', 'success');
   },
-
+ 
   saveAndFinish() {
     const w    = this.state.wizard;
     const comp = {
@@ -682,7 +733,7 @@ const APP = {
     this.state.wizard = null;
     this.go('indice');
   },
-
+ 
   _stepsDots(current) {
     const labels = ['Categoría','Tipo','Propios','Externos','Generar','Exportar'];
     return labels.map((l,i) => `
@@ -691,7 +742,7 @@ const APP = {
         <span>${l}</span>
       </div>`).join('');
   },
-
+ 
   // ═══════════════════════════════════════════════════════════════════════════
   // INDEX
   // ═══════════════════════════════════════════════════════════════════════════
@@ -717,7 +768,7 @@ const APP = {
             </tr>`;
         }).join('')
       : `<tr><td colspan="6" class="empty-row">Sin comparativas guardadas. <button class="link-btn" onclick="APP.go('nueva')">Crear la primera →</button></td></tr>`;
-
+ 
     document.getElementById('sec-indice').innerHTML = `
       <div class="sec-head">
         <h2>Índice de Comparativas</h2>
@@ -732,7 +783,7 @@ const APP = {
         </table>
       </div>`;
   },
-
+ 
   previewComp(id) {
     const comp = DB.getComparativas().find(c => c.id === id);
     if (!comp) return;
@@ -741,7 +792,7 @@ const APP = {
     w.document.write(html);
     w.document.close();
   },
-
+ 
   reexportComp(id, formato) {
     const comp = DB.getComparativas().find(c => c.id === id);
     if (!comp) return;
@@ -750,13 +801,13 @@ const APP = {
     EXPORT.downloadHTML(html, `${name}_${formato}.html`);
     this.showToast('HTML exportado.', 'success');
   },
-
+ 
   deleteComp(id) {
     if (!confirm('¿Eliminar esta comparativa del índice?')) return;
     DB.deleteComparativa(id);
     this.renderIndex();
   },
-
+ 
   // ═══════════════════════════════════════════════════════════════════════════
   // CONFIG
   // ═══════════════════════════════════════════════════════════════════════════
@@ -765,7 +816,7 @@ const APP = {
     document.getElementById('sec-config').innerHTML = `
       <div class="config-wrap">
         <h2>Configuración</h2>
-
+ 
         <div class="config-section">
           <h3>🤖 Gemini API Key</h3>
           <p class="config-hint">Obtenela en <a href="https://aistudio.google.com" target="_blank">aistudio.google.com</a> → Get API Key</p>
@@ -775,7 +826,7 @@ const APP = {
             </div>
           </div>
         </div>
-
+ 
         <div class="config-section">
           <h3>📊 Google Sheet</h3>
           <p class="config-hint">ID de tu planilla Gadnic Comparador (ya configurado)</p>
@@ -784,7 +835,7 @@ const APP = {
           </div>
           <a href="https://docs.google.com/spreadsheets/d/${s.sheetId||CONFIG.sheetId}/edit" target="_blank" class="link-btn">→ Abrir Sheet</a>
         </div>
-
+ 
         <div class="config-section">
           <h3>🏢 Empresa</h3>
           <div class="form-row-2">
@@ -798,7 +849,7 @@ const APP = {
             </div>
           </div>
         </div>
-
+ 
         <button class="btn-primary" onclick="APP.saveConfig()">Guardar configuración</button>
         <div style="margin-top:24px;padding-top:24px;border-top:1px solid var(--border)">
           <h3 style="margin-bottom:12px">⚠ Zona de riesgo</h3>
@@ -806,7 +857,7 @@ const APP = {
         </div>
       </div>`;
   },
-
+ 
   saveConfig() {
     const settings = {
       geminiKey: document.getElementById('cfg-gemini').value.trim(),
@@ -818,20 +869,20 @@ const APP = {
     if (settings.geminiKey) document.getElementById('setup-banner').style.display = 'none';
     this.showToast('Configuración guardada.', 'success');
   },
-
+ 
   clearAllData() {
     if (!confirm('¿Borrar TODO? Catálogo, comparativas y configuración. Esto no se puede deshacer.')) return;
     localStorage.clear();
     location.reload();
   },
-
+ 
   // ═══════════════════════════════════════════════════════════════════════════
   // UTILS
   // ═══════════════════════════════════════════════════════════════════════════
   closeModal(id) {
     document.getElementById(id)?.remove();
   },
-
+ 
   showToast(msg, type = 'info') {
     const t = document.createElement('div');
     t.className = `toast toast-${type}`;
@@ -841,5 +892,5 @@ const APP = {
     setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 300); }, 3500);
   }
 };
-
+ 
 document.addEventListener('DOMContentLoaded', () => APP.init());
