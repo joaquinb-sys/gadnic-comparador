@@ -643,8 +643,7 @@ const APP = {
         for (let p = 1; p <= pdf.numPages; p++) {
           const page  = await pdf.getPage(p);
           const items = (await page.getTextContent()).items;
-          textContent += items.map(i => i.str).join(' ') + '
-';
+          textContent += items.map(i => i.str).join(' ') + '\n';
         }
 
       } else if (ext === 'xlsx' || ext === 'xls') {
@@ -693,47 +692,46 @@ ${csv}
   },
 
   _showExternosPreview(products, catId) {
-    const cat = CONFIG.categorias[catId];
-    document.getElementById('ext-file-body').innerHTML = `
-      <p style="margin-bottom:14px;font-size:13px;color:var(--text-muted)">
-        Se encontraron <strong>${products.length} productos</strong>. Seleccioná cuáles agregar a la comparativa.
-      </p>
-      <div style="overflow-x:auto;max-height:400px;overflow-y:auto">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th><input type="checkbox" id="ext-check-all" checked
-                onchange="document.querySelectorAll('.ext-check').forEach(c=>c.checked=this.checked)"></th>
-              <th>SKU</th><th>Nombre</th><th>Precio</th><th>FOB</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${products.map((p, i) => `
-              <tr>
-                <td><input type="checkbox" class="ext-check" data-i="${i}" checked></td>
-                <td><span class="sku-text">${p.sku || '–'}</span></td>
-                <td>${p.nombre || '–'}</td>
-                <td>${p.precio_ars ? '$' + Number(p.precio_ars).toLocaleString('es-AR') : p.pvp_ars ? '$' + Number(p.pvp_ars).toLocaleString('es-AR') : '–'}</td>
-                <td>${p.fob_usd ? 'USD ' + p.fob_usd : '–'}</td>
-              </tr>`).join('')}
-          </tbody>
-        </table>
-      </div>
-      <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px">
-        <button class="btn-ghost" onclick="APP.closeModal('ext-file-modal')">Cancelar</button>
-        <button class="btn-primary" onclick="APP.confirmExternosFromFile(${JSON.stringify(products).replace(/"/g, '&quot;')})">
-          Agregar seleccionados →
-        </button>
-      </div>`;
+    // Store in state to avoid passing large JSON through onclick
+    this.state._pendingExternos = products;
+    const rows = products.map((p, i) => {
+      const precio = p.precio_ars
+        ? '$' + Number(p.precio_ars).toLocaleString('es-AR')
+        : p.pvp_ars ? '$' + Number(p.pvp_ars).toLocaleString('es-AR') : '–';
+      const fob = p.fob_usd ? 'USD ' + p.fob_usd : '–';
+      const sku = (p.sku || '–').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      const nom = (p.nombre || '–').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      return `<tr>
+        <td><input type="checkbox" class="ext-check" data-i="${i}" checked></td>
+        <td><span class="sku-text">${sku}</span></td>
+        <td>${nom}</td>
+        <td>${precio}</td>
+        <td>${fob}</td>
+      </tr>`;
+    }).join('');
+
+    const bodyParts = [];
+    bodyParts.push('<p style="margin-bottom:14px;font-size:13px;color:var(--text-muted)">Se encontraron <strong>' + products.length + ' productos</strong>. Seleccioná cuáles agregar.</p>');
+    bodyParts.push('<div style="overflow-x:auto;max-height:380px;overflow-y:auto"><table class="data-table">');
+    bodyParts.push('<thead><tr><th><input type="checkbox" id="ext-check-all" checked onclick="document.querySelectorAll(\'.ext-check\').forEach(c=>c.checked=this.checked)"></th>');
+    bodyParts.push('<th>SKU</th><th>Nombre</th><th>Precio</th><th>FOB</th></tr></thead>');
+    bodyParts.push('<tbody>' + rows + '</tbody></table></div>');
+    bodyParts.push('<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px">');
+    bodyParts.push('<button class="btn-ghost" onclick="APP.closeModal(\'ext-file-modal\')">Cancelar</button>');
+    bodyParts.push('<button class="btn-primary" onclick="APP.confirmExternosFromFile()">Agregar seleccionados</button>');
+    bodyParts.push('</div>');
+    document.getElementById('ext-file-body').innerHTML = bodyParts.join('');
   },
 
-  confirmExternosFromFile(products) {
-    const checks = document.querySelectorAll('.ext-check');
+  confirmExternosFromFile() {
+    const products = this.state._pendingExternos || [];
+    const checks   = document.querySelectorAll('.ext-check');
     const selected = products.filter((_, i) => checks[i]?.checked);
     this.state.wizard.externos.push(...selected);
+    this.state._pendingExternos = null;
     this.closeModal('ext-file-modal');
     this.renderWizardStep4();
-    this.showToast(`${selected.length} productos agregados desde el archivo.`, 'success');
+    this.showToast(selected.length + ' productos agregados desde el archivo.', 'success');
   },
 
   addExterno() {
