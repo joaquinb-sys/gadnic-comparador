@@ -1,5 +1,6 @@
 // ─── GADNIC COMPARADOR · DATA LAYER ───────────────────────────────────────────
 const DB = {
+  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbwflGG6FtVtOm-tLp4pxbKg8-DFhujTUx15qS4vH3ypU7gYUIfTznrqCFDhaIksQVh7/exec',
   _key: (k) => `gadnic_${k}`,
 
   // ── Settings ──────────────────────────────────────────────────────────────
@@ -90,32 +91,6 @@ const DB = {
     }
   },
 
-  // ── Export / Import ALL ───────────────────────────────────────────────────
-  exportAll() {
-    const data = {
-      version: 1,
-      fecha: new Date().toISOString(),
-      settings: this.getSettings(),
-      catalogos: {},
-      comparativas: this.getComparativas(),
-    };
-    for (const catId of Object.keys(CONFIG.categorias)) {
-      data.catalogos[catId] = this.getCatalog(catId);
-    }
-    return data;
-  },
-
-  importAll(data) {
-    if (!data.version || !data.catalogos) throw new Error('Formato inválido.');
-    if (data.settings) this.saveSettings(data.settings);
-    for (const [catId, prods] of Object.entries(data.catalogos)) {
-      if (CONFIG.categorias[catId]) this.saveCatalog(catId, prods);
-    }
-    if (data.comparativas) {
-      localStorage.setItem(this._key('comparativas'), JSON.stringify(data.comparativas));
-    }
-  },
-
   // Map Sheet row → product using field IDs
   sheetRowToProduct(row, catId) {
     const cat = CONFIG.categorias[catId];
@@ -141,4 +116,116 @@ const DB = {
     p.id = p.sku || `imported_${Date.now()}`;
     return p;
   }
+
+  // ── Apps Script API ───────────────────────────────────────────────────────
+
+  async _get(params) {
+    const url = this.APPS_SCRIPT_URL + '?' + new URLSearchParams(params);
+    const res = await fetch(url);
+    return res.json();
+  },
+
+  async _post(body) {
+    const res = await fetch(this.APPS_SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify(body)
+    });
+    return res.json();
+  },
+
+  async pingScript() {
+    try {
+      const r = await this._get({ action: 'ping' });
+      return r.ok === true;
+    } catch { return false; }
+  },
+
+  // ── Sync catalog to Sheets ────────────────────────────────────────────────
+  async pushCatalog(catId) {
+    const cat      = CONFIG.categorias[catId];
+    const products = this.getCatalog(catId);
+    if (!products.length) return { ok: true, added: 0, updated: 0 };
+
+    // Map products to Sheet row format
+    const rows = products.map(p => {
+      const row = {
+        SKU:                p.sku || '',
+        Nombre:             p.nombre || '',
+        Nivel:              p.nivel || '',
+        FOB_USD:            p.fob_usd || '',
+        PVP_ARS:            p.pvp_ars || '',
+        Rentabilidad:       p.rentabilidad || '',
+        Diferenciadores:    p.diferenciadores || '',
+        Fuente:             p.fuente || '',
+        Fecha_actualizacion: p.fecha || new Date().toISOString()
+      };
+      // Add category-specific specs
+      for (const f of cat.campos) {
+        row[f.id] = p[f.id] ?? '';
+      }
+      return row;
+    });
+
+    return this._post({ action: 'upsert', sheet: cat.sheetName, rows });
+  },
+
+  // ── Delete product from Sheets ────────────────────────────────────────────
+  async deleteFromSheet(catId, sku) {
+    const cat = CONFIG.categorias[catId];
+    return this._post({ action: 'delete', sheet: cat.sheetName, sku });
+  },
+
+  // ── Pull catalog from Sheets (read) ──────────────────────────────────────
+  async pullCatalog(catId) {
+    const cat  = CONFIG.categorias[catId];
+    const data = await this._get({ action: 'read', sheet: cat.sheetName });
+    if (!data.rows || !data.rows.length) return { added: 0, updated: 0 };
+
+    const existing = this.getCatalog(catId);
+    let added = 0, updated = 0;
+
+    for (const row of data.rows) {
+      if (!row['SKU'] && !row['Nombre']) continue;
+      const prod = this.sheetRowToProduct(row, catId);
+      const ex   = existing.find(p => p.sku === prod.sku);
+      if (ex) { this.updateProduct(catId, ex.id, prod); updated++; }
+      else    { this.addProduct(catId, prod); added++; }
+    }
+    return { added, updated };
+  },
+
+  // ── Save comparativa to Sheets ────────────────────────────────────────────
+  async pushComparativa(comp) {
+    return this._post({ action: 'saveComp', data: comp });
+  },
+
+  // ── Delete comparativa from Sheets ────────────────────────────────────────
+  async deleteComparativaFromSheet(id) {
+    return this._post({ action: 'deleteComp', id });
+  },
+
+  // ── Pull comparativas from Sheets ────────────────────────────────────────
+  async pullComparativas() {
+    const data = await this._get({ action: 'read', sheet: 'Comparativas' });
+    if (!data.rows || !data.rows.length) return 0;
+
+    const list = data.rows.map(row => ({
+      id:       row['ID'],
+      fecha:    row['Fecha'],
+      catId:    row['Categoria'],
+      tipo:     row['Tipo'],
+      nombre:   row['Nombre'],
+      formato:  row['Formato'] || 'tarjetas',
+      propios:  this._parseJSON(row['Propios']),
+      externos: this._parseJSON(row['Externos']),
+      analisis: this._parseJSON(row['Analisis']),
+    })).filter(c => c.id);
+
+    localStorage.setItem(this._key('comparativas'), JSON.stringify(list));
+    return list.length;
+  },
+
+  _parseJSON(str) {
+    try { return JSON.parse(str || '[]'); } catch { return []; }
+  },
 };

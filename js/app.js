@@ -14,6 +14,18 @@ const APP = {
     this.checkSetup();
     this.bindNav();
     this.render();
+    // Auto-sync catalogs from Sheets on load
+    this._autoSync();
+  },
+
+  async _autoSync() {
+    try {
+      for (const catId of Object.keys(CONFIG.categorias)) {
+        await DB.pullCatalog(catId);
+      }
+      await DB.pullComparativas();
+      this.render();
+    } catch { /* silent fail */ }
   },
 
   checkSetup() {
@@ -93,7 +105,8 @@ const APP = {
     document.getElementById('cat-content').innerHTML = `
       <div class="cat-toolbar">
         <button class="btn-primary" onclick="APP.openProductModal('${catId}')">+ Agregar producto</button>
-        <button class="btn-ghost" onclick="APP.syncFromSheets('${catId}')">↓ Sincronizar desde Sheets</button>
+        <button class="btn-ghost" onclick="APP.syncFromSheets('${catId}')">↓ Importar desde Sheets</button>
+        <button class="btn-ghost" onclick="APP.pushToSheets('${catId}')">↑ Guardar en Sheets</button>
         <button class="btn-ai" onclick="APP.openPDFImport('${catId}')">📄 Importar desde PDF</button>
         <input type="file" id="pdf-import-input" accept=".pdf" style="display:none" onchange="APP.handlePDFImport(this,'${catId}')">
         <span class="count-label">${prods.length} productos en catálogo</span>
@@ -130,41 +143,24 @@ const APP = {
   },
 
   async syncFromSheets(catId) {
-    const cat = CONFIG.categorias[catId];
-    const s   = DB.getSettings();
-    const sheetId = s.sheetId || CONFIG.sheetId;
-
     this.showToast('Sincronizando desde Sheets…', 'info');
-    const rows = await DB.loadSheetTab(sheetId, cat.sheetName);
-
-    if (!rows) {
-      this.showToast('Error al conectar con Sheets. Verificá que el Sheet esté público.', 'error');
-      return;
+    try {
+      const { added, updated } = await DB.pullCatalog(catId);
+      this.showToast(`Sincronizado: ${added} nuevos, ${updated} actualizados.`, 'success');
+      this.renderCatalog();
+    } catch(e) {
+      this.showToast('Error al sincronizar: ' + e.message, 'error');
     }
-    if (!rows.length) {
-      this.showToast('La pestaña está vacía. Cargá datos en el Sheet primero.', 'warn');
-      return;
+  },
+
+  async pushToSheets(catId) {
+    this.showToast('Guardando en Sheets…', 'info');
+    try {
+      const { added, updated } = await DB.pushCatalog(catId);
+      this.showToast(`Guardado: ${added} nuevos, ${updated} actualizados.`, 'success');
+    } catch(e) {
+      this.showToast('Error al guardar: ' + e.message, 'error');
     }
-
-    // Merge: update existing by SKU, add new
-    const existing = DB.getCatalog(catId);
-    let added = 0, updated = 0;
-
-    for (const row of rows) {
-      if (!row['SKU'] && !row['Nombre']) continue;
-      const prod = DB.sheetRowToProduct(row, catId);
-      const ex   = existing.find(p => p.sku === prod.sku);
-      if (ex) {
-        DB.updateProduct(catId, ex.id, prod);
-        updated++;
-      } else {
-        DB.addProduct(catId, prod);
-        added++;
-      }
-    }
-
-    this.showToast(`Sincronizado: ${added} nuevos, ${updated} actualizados.`, 'success');
-    this.renderCatalog();
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -350,6 +346,8 @@ const APP = {
 
     this.closeModal('prod-modal');
     this.renderCatalog();
+    // Auto-sync to Sheets in background
+    DB.pushCatalog(catId).catch(() => {});
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -939,8 +937,9 @@ const APP = {
       analisis: w.analisis,
       formato:  w.formato,
     };
-    DB.saveComparativa(comp);
-    this.showToast('Guardado en el índice.', 'success');
+    const saved = DB.saveComparativa(comp);
+    DB.pushComparativa(saved).catch(() => {});
+    this.showToast('Guardado en el índice y en Sheets.', 'success');
     this.state.wizard = null;
     this.go('indice');
   },
@@ -983,7 +982,10 @@ const APP = {
     document.getElementById('sec-indice').innerHTML = `
       <div class="sec-head">
         <h2>Índice de Comparativas</h2>
-        <button class="btn-primary" onclick="APP.go('nueva')">+ Nueva comparativa</button>
+        <div style="display:flex;gap:8px">
+          <button class="btn-ghost" onclick="APP.syncComparativas()">↓ Sincronizar desde Sheets</button>
+          <button class="btn-primary" onclick="APP.go('nueva')">+ Nueva comparativa</button>
+        </div>
       </div>
       <div class="table-scroll">
         <table class="data-table">
@@ -993,6 +995,17 @@ const APP = {
           <tbody>${rows}</tbody>
         </table>
       </div>`;
+  },
+
+  async syncComparativas() {
+    this.showToast('Sincronizando comparativas…', 'info');
+    try {
+      const count = await DB.pullComparativas();
+      this.showToast(`${count} comparativas sincronizadas.`, 'success');
+      this.renderIndex();
+    } catch(e) {
+      this.showToast('Error: ' + e.message, 'error');
+    }
   },
 
   previewComp(id) {
