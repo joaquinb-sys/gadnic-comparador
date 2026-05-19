@@ -397,3 +397,13 @@ body {
 .ext-separator::before, .ext-separator::after {
   content: ''; flex: 1; height: 1px; background: var(--border);
 }
+
+/* ── Paste image button ──────────────────────────────────────────────────── */
+.btn-paste-img {
+  background: var(--surface2); border: 1px solid var(--border);
+  color: var(--text-muted); width: 32px; height: 34px;
+  border-radius: var(--radius-sm); cursor: pointer; font-size: 15px;
+  flex-shrink: 0; transition: all .15s;
+  display: flex; align-items: center; justify-content: center;
+}
+.btn-paste-img:hover { background: var(--accent-lt); border-color: var(--accent); }
