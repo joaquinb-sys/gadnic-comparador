@@ -378,3 +378,22 @@ body {
 
 /* ── AI flag ─────────────────────────────────────────────────────────────── */
 .ai-flag { font-size: 9px; background: var(--accent-lt); color: var(--accent); padding: 2px 6px; border-radius: 10px; font-weight: 700; }
+
+/* ── File import box ─────────────────────────────────────────────────────── */
+.file-import-box {
+  display: flex; align-items: center; gap: 16px;
+  background: var(--accent-lt); border: 2px dashed var(--accent);
+  border-radius: var(--radius); padding: 18px 20px;
+  margin-bottom: 8px;
+}
+.fib-icon { font-size: 28px; }
+.fib-text { flex: 1; }
+.fib-text strong { display: block; font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 3px; }
+.fib-text span { font-size: 12px; color: var(--text-muted); }
+.ext-separator {
+  display: flex; align-items: center; gap: 12px;
+  margin: 16px 0; color: var(--text-muted); font-size: 12px;
+}
+.ext-separator::before, .ext-separator::after {
+  content: ''; flex: 1; height: 1px; background: var(--border);
+}
