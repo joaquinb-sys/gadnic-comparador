@@ -565,16 +565,175 @@ const APP = {
           <h2>Productos externos</h2>
           <div class="wizard-steps">${this._stepsDots(4)}</div>
         </div>
-        <p class="wizard-hint">Cargá los productos con los que querés comparar. Pegá la URL y usá ✨ IA para extraer las specs automáticamente, o completá a mano.</p>
-        <div id="externos-list">
-          ${externos.length ? externos.map((p,i) => renderExtCard(p,i)).join('') : `<div class="empty-wizard">Agregá al menos un producto externo.</div>`}
+
+        <div class="file-import-box">
+          <div class="fib-icon">📎</div>
+          <div class="fib-text">
+            <strong>Cargar desde archivo</strong>
+            <span>Excel de cotización o PDF de roadmap — la IA detecta todos los productos automáticamente</span>
+          </div>
+          <input type="file" id="ext-file-input" accept=".xlsx,.xls,.pdf" style="display:none"
+            onchange="APP.loadExternosFromFile(this)">
+          <button class="btn-primary" onclick="document.getElementById('ext-file-input').click()">
+            Seleccionar archivo
+          </button>
         </div>
-        <button class="btn-ghost btn-add-ext" onclick="APP.addExterno()">+ Agregar producto externo</button>
+
+        <div class="ext-separator"><span>o cargá productos uno a uno</span></div>
+
+        <div id="externos-list">
+          ${externos.length ? externos.map((p,i) => renderExtCard(p,i)).join('') : ''}
+        </div>
+        <button class="btn-ghost btn-add-ext" onclick="APP.addExterno()">+ Agregar producto externo manualmente</button>
         <div class="wizard-foot">
           <button class="btn-ghost" onclick="APP.wizardBack()">← Atrás</button>
           <button class="btn-primary" onclick="APP.wizardNext()" ${externos.length===0?'disabled':''}>Siguiente →</button>
         </div>
       </div>`;
+  },
+
+  // ── Load externos from Excel or PDF file ─────────────────────────────────
+  async loadExternosFromFile(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const { catId } = this.state.wizard;
+    const ext = file.name.split('.').pop().toLowerCase();
+
+    // Show loading modal
+    document.body.insertAdjacentHTML('beforeend', `
+      <div class="modal-overlay" id="ext-file-modal">
+        <div class="modal-box" style="max-width:500px">
+          <div class="modal-head">
+            <h2>📎 Importando archivo</h2>
+          </div>
+          <div class="modal-body" id="ext-file-body">
+            <div style="text-align:center;padding:30px">
+              <div style="font-size:32px;margin-bottom:12px">⏳</div>
+              <p id="ext-file-status">Leyendo archivo…</p>
+            </div>
+          </div>
+        </div>
+      </div>`);
+
+    const setStatus = (msg) => {
+      const el = document.getElementById('ext-file-status');
+      if (el) el.textContent = msg;
+    };
+
+    try {
+      let textContent = '';
+      let linksByRow  = {};
+
+      if (ext === 'pdf') {
+        // ── PDF via pdf.js ────────────────────────────────────────────────
+        setStatus('Cargando lector de PDF…');
+        if (!window.pdfjsLib) {
+          await new Promise((res, rej) => {
+            const s = document.createElement('script');
+            s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+            s.onload = res; s.onerror = rej;
+            document.head.appendChild(s);
+          });
+          window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+            'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        }
+        setStatus('Extrayendo texto del PDF…');
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        for (let p = 1; p <= pdf.numPages; p++) {
+          const page  = await pdf.getPage(p);
+          const items = (await page.getTextContent()).items;
+          textContent += items.map(i => i.str).join(' ') + '
+';
+        }
+
+      } else if (ext === 'xlsx' || ext === 'xls') {
+        // ── Excel via SheetJS ─────────────────────────────────────────────
+        setStatus('Cargando lector de Excel…');
+        if (!window.XLSX) {
+          await new Promise((res, rej) => {
+            const s = document.createElement('script');
+            s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+            s.onload = res; s.onerror = rej;
+            document.head.appendChild(s);
+          });
+        }
+        setStatus('Leyendo hojas de cálculo…');
+        const arrayBuffer = await file.arrayBuffer();
+        const wb = window.XLSX.read(arrayBuffer, { type: 'array' });
+        // Convert all sheets to CSV text
+        for (const sheetName of wb.SheetNames) {
+          const ws  = wb.Sheets[sheetName];
+          const csv = window.XLSX.utils.sheet_to_csv(ws, { blankrows: false });
+          textContent += `
+=== Hoja: ${sheetName} ===
+${csv}
+`;
+        }
+      } else {
+        throw new Error('Formato no soportado. Usá Excel (.xlsx) o PDF.');
+      }
+
+      setStatus('🤖 Enviando a IA para interpretar los productos…');
+      const products = await GEMINI.extractFromPDF(textContent, linksByRow, catId);
+
+      if (!products || !products.length) throw new Error('No se encontraron productos en el archivo.');
+
+      // Show preview to confirm
+      this._showExternosPreview(products, catId);
+
+    } catch(e) {
+      document.getElementById('ext-file-body').innerHTML = `
+        <div style="padding:20px;text-align:center">
+          <p style="color:var(--danger);margin-bottom:16px">⚠ ${e.message}</p>
+          <button class="btn-ghost" onclick="APP.closeModal('ext-file-modal')">Cerrar</button>
+        </div>`;
+    }
+    input.value = '';
+  },
+
+  _showExternosPreview(products, catId) {
+    const cat = CONFIG.categorias[catId];
+    document.getElementById('ext-file-body').innerHTML = `
+      <p style="margin-bottom:14px;font-size:13px;color:var(--text-muted)">
+        Se encontraron <strong>${products.length} productos</strong>. Seleccioná cuáles agregar a la comparativa.
+      </p>
+      <div style="overflow-x:auto;max-height:400px;overflow-y:auto">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th><input type="checkbox" id="ext-check-all" checked
+                onchange="document.querySelectorAll('.ext-check').forEach(c=>c.checked=this.checked)"></th>
+              <th>SKU</th><th>Nombre</th><th>Precio</th><th>FOB</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${products.map((p, i) => `
+              <tr>
+                <td><input type="checkbox" class="ext-check" data-i="${i}" checked></td>
+                <td><span class="sku-text">${p.sku || '–'}</span></td>
+                <td>${p.nombre || '–'}</td>
+                <td>${p.precio_ars ? '$' + Number(p.precio_ars).toLocaleString('es-AR') : p.pvp_ars ? '$' + Number(p.pvp_ars).toLocaleString('es-AR') : '–'}</td>
+                <td>${p.fob_usd ? 'USD ' + p.fob_usd : '–'}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px">
+        <button class="btn-ghost" onclick="APP.closeModal('ext-file-modal')">Cancelar</button>
+        <button class="btn-primary" onclick="APP.confirmExternosFromFile(${JSON.stringify(products).replace(/"/g, '&quot;')})">
+          Agregar seleccionados →
+        </button>
+      </div>`;
+  },
+
+  confirmExternosFromFile(products) {
+    const checks = document.querySelectorAll('.ext-check');
+    const selected = products.filter((_, i) => checks[i]?.checked);
+    this.state.wizard.externos.push(...selected);
+    this.closeModal('ext-file-modal');
+    this.renderWizardStep4();
+    this.showToast(`${selected.length} productos agregados desde el archivo.`, 'success');
   },
 
   addExterno() {
