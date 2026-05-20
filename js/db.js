@@ -115,7 +115,7 @@ const DB = {
     }
     p.id = p.sku || `imported_${Date.now()}`;
     return p;
-  }
+  },
 
   // ── Apps Script API ───────────────────────────────────────────────────────
 
