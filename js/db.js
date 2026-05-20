@@ -120,17 +120,23 @@ const DB = {
   // ── Apps Script API ───────────────────────────────────────────────────────
 
   async _get(params) {
+    // GET requests work fine with CORS on Apps Script
     const url = this.APPS_SCRIPT_URL + '?' + new URLSearchParams(params);
     const res = await fetch(url);
+    if (!res.ok) throw new Error(`Error ${res.status}`);
     return res.json();
   },
 
   async _post(body) {
-    const res = await fetch(this.APPS_SCRIPT_URL, {
+    // POST to Apps Script requires no-cors (preflight blocked)
+    // Write still happens — we just don't get a confirmation response
+    await fetch(this.APPS_SCRIPT_URL, {
       method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify(body)
     });
-    return res.json();
+    return { ok: true };
   },
 
   async pingScript() {
